@@ -37,9 +37,12 @@ Notes.find_note = function(opts)
       if selection then
         vim.cmd("e " .. opts.dir .. "/" .. selection[1])
       else
+        local line = action_state.get_current_line()
+        local parts = vim.fn.split(line, "\\s*,\\s*")
         local filename = Notes.get_filename({
           dir = opts.dir,
-          title = action_state.get_current_line(),
+          title = parts[1],
+          tags = { table.unpack(parts, 2) },
         })
 
         vim.cmd("e " .. opts.dir .. "/" .. filename)
