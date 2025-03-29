@@ -1,5 +1,20 @@
 local Notes = {}
 
+Notes.get_filename = function(opts)
+  local timestamp = opts.timestamp or os.date("!%Y%m%dT%H%M%S", os.time())
+
+  local title = opts.title
+
+  title = title:lower()
+  title = title:gsub(" ", "-")
+  title = title:gsub("-+", "-")
+  title = title:gsub("[^-0-9a-zæøå]", "")
+
+  local filename = timestamp .. "--" .. title .. ".md"
+
+  return filename
+end
+
 Notes.find_note = function(opts)
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
@@ -12,16 +27,11 @@ Notes.find_note = function(opts)
       if selection then
         vim.cmd("e " .. opts.dir .. "/" .. selection[1])
       else
-        local timestamp = os.date("!%Y%m%dT%H%M%S", os.time())
+        local filename = Notes.get_filename({
+          dir = opts.dir,
+          title = action_state.get_current_line(),
+        })
 
-        local title = action_state.get_current_line()
-
-        title = title:lower()
-        title = title:gsub(" ", "-")
-        title = title:gsub("-+", "-")
-        title = title:gsub("[^-0-9a-zæøå]", "")
-
-        local filename = timestamp .. "--" .. title .. ".md"
         vim.cmd("e " .. opts.dir .. "/" .. filename)
       end
     end)
