@@ -1,7 +1,7 @@
 local Notes = {}
 
 Notes.get_filename = function(opts)
-  local timestamp = opts.timestamp or os.date("!%Y%m%dT%H%M%S", os.time())
+  local timestamp = os.date("!%Y%m%dT%H%M%S", opts.timestamp or os.time())
 
   local title = opts.title
 
@@ -10,7 +10,17 @@ Notes.get_filename = function(opts)
   title = title:gsub("-+", "-")
   title = title:gsub("[^-0-9a-zæøå]", "")
 
-  local filename = timestamp .. "--" .. title .. ".md"
+  local filename = timestamp .. "--" .. title
+
+  local tags = opts.tags or {}
+  if 0 < #tags then
+    filename = filename .. "_"
+    for _, tag in ipairs(tags) do
+      filename = filename .. "_" .. tag
+    end
+  end
+
+  filename = filename .. ".md"
 
   return filename
 end
