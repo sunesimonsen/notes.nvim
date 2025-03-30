@@ -12,11 +12,30 @@ local function clean_tag(tag)
   tag = tag:lower()
   tag = tag:gsub(" ", "-")
   tag = tag:gsub("_+", "_")
-  tag = tag:gsub("[^_0-9a-zæøå]", "")
+  tag = tag:gsub("[^0-9a-zæøå]", "")
   return tag
 end
 
-local get_filename = function(opts)
+local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9a-zæøå]+)([_0-9a-zæøå]*).md$]]
+local function parse_filename(filename)
+  local timestamp, title_string, tags_string = string.match(filename, filename_regexp)
+  print(timestamp, title_string, tags_string)
+
+  if not title_string then
+    return nil
+  end
+
+  local title = vim.fn.join(vim.fn.split(title_string, "-"), " ")
+  local tags = vim.fn.split(tags_string, "_")
+
+  return {
+    timestamp = timestamp,
+    title = title,
+    tags = tags,
+  }
+end
+
+local function get_filename(opts)
   local timestamp = os.date("!%Y%m%dT%H%M%S", opts.timestamp or os.time())
 
   local title = clean_title(opts.title)
