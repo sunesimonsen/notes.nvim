@@ -70,37 +70,21 @@ local function tags_from_filename(filename)
   end
 end
 
-local function file_exists(filename)
-  local file = io.open(filename, "r")
-  if file then
-    io.close(file)
-    return true
-  else
-    return false
-  end
-end
-
 local function rename_current_file(new_filename)
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local buf = vim.api.nvim_get_current_buf()
 
   local filename = vim.fn.expand("%")
   local folder = vim.fn.expand("%:p:h")
-  local exists = file_exists(filename)
-  if exists then
-    -- Reload content from file
-    vim.cmd("!cp % " .. folder .. "/" .. new_filename)
-  end
+
+  os.rename(filename, folder .. "/" .. new_filename)
 
   vim.cmd("e! " .. folder .. "/" .. new_filename)
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+
   vim.api.nvim_buf_delete(buf, { force = true })
 
-  if exists then
-    -- Resmove old file
-    vim.cmd("!rm " .. filename)
-  end
-
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  os.remove(filename)
 end
 
 Notes.toggle_tag = function(opts)
