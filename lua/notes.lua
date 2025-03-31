@@ -19,7 +19,6 @@ end
 local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9a-zæøå]+)([_0-9a-zæøå]*).md$]]
 local function parse_filename(filename)
   local timestamp, title_string, tags_string = string.match(filename, filename_regexp)
-  print(timestamp, title_string, tags_string)
 
   if not title_string then
     return nil
@@ -36,7 +35,7 @@ local function parse_filename(filename)
 end
 
 local function get_filename(opts)
-  local timestamp = os.date("!%Y%m%dT%H%M%S", opts.timestamp or os.time())
+  local timestamp = opts.timestamp or os.date("!%Y%m%dT%H%M%S", os.time())
 
   local title = clean_title(opts.title)
 
@@ -69,6 +68,39 @@ local function tags_from_filename(filename)
   else
     return {}
   end
+end
+
+local function file_exists(filename)
+  local file = io.open(filename, "r")
+  if file then
+    io.close(file)
+    return true
+  else
+    return false
+  end
+end
+
+local function rename_current_file(new_filename)
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local buf = vim.api.nvim_get_current_buf()
+
+  local filename = vim.fn.expand("%")
+  local folder = vim.fn.expand("%:p:h")
+  local exists = file_exists(filename)
+  if exists then
+    -- Reload content from file
+    vim.cmd("!cp % " .. folder .. "/" .. new_filename)
+  end
+
+  vim.cmd("e! " .. folder .. "/" .. new_filename)
+  vim.api.nvim_buf_delete(buf, { force = true })
+
+  if exists then
+    -- Resmove old file
+    vim.cmd("!rm " .. filename)
+  end
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
 end
 
 Notes.toggle_tag = function(opts)
@@ -111,11 +143,23 @@ Notes.toggle_tag = function(opts)
       end
     end,
   }, function(selected)
-    if selected.enabled then
-      print("Remove tag: " .. selected.tag)
-    else
-      print("Add tag: " .. selected.tag)
+    local file_info = parse_filename(filename)
+    tags_table[selected.tag] = not selected.enabled
+
+    local tags = {}
+    for tag, enabled in pairs(tags_table) do
+      if enabled then
+        table.insert(tags, tag)
+      end
     end
+
+    local new_filename = get_filename({
+      timestamp = file_info.timestamp,
+      title = file_info.title,
+      tags = tags,
+    })
+
+    rename_current_file(new_filename)
   end)
 end
 
