@@ -62,6 +62,63 @@ local function get_filename(opts)
   return filename
 end
 
+local function tags_from_filename(filename)
+  local parsed_filename = parse_filename(filename)
+  if parsed_filename then
+    return parsed_filename.tags
+  else
+    return {}
+  end
+end
+
+Notes.toggle_tag = function(opts)
+  if not (opts.dir == vim.fn.expand("%:p:h")) then
+    print("Not in a note file")
+    return
+  end
+
+  local tags_table = {}
+
+  local files = vim.fn.split(vim.fn.globpath(opts.dir, "*.md"), "\n")
+
+  for _, filename in pairs(files) do
+    for _, tag in pairs(tags_from_filename(filename)) do
+      tags_table[tag] = false
+    end
+  end
+
+  local filename = vim.fn.expand("%:p:t")
+  for _, tag in pairs(tags_from_filename(filename)) do
+    tags_table[tag] = true
+  end
+
+  local available_tags = {}
+  for tag, enabled in pairs(tags_table) do
+    table.insert(available_tags, { tag = tag, enabled = enabled })
+  end
+
+  table.sort(available_tags, function(a, b)
+    return a.tag > b.tag
+  end)
+
+  vim.ui.select(available_tags, {
+    prompt = "Select a tag to toggle",
+    format_item = function(item)
+      if item.enabled then
+        return "☑ " .. item.tag
+      else
+        return "☐ " .. item.tag
+      end
+    end,
+  }, function(selected)
+    if selected.enabled then
+      print("Remove tag: " .. selected.tag)
+    else
+      print("Add tag: " .. selected.tag)
+    end
+  end)
+end
+
 Notes.find_note = function(opts)
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
