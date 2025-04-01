@@ -71,8 +71,14 @@ local function tags_from_filename(filename)
 end
 
 local function rename_current_file(new_filename)
-  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local buf = vim.api.nvim_get_current_buf()
+  local modified = vim.api.nvim_get_option_value("modified", { buf = buf })
+
+  local lines = {}
+
+  if modified then
+    lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  end
 
   local filename = vim.fn.expand("%")
   local folder = vim.fn.expand("%:p:h")
@@ -80,7 +86,9 @@ local function rename_current_file(new_filename)
   os.rename(filename, folder .. "/" .. new_filename)
 
   vim.cmd("e! " .. folder .. "/" .. new_filename)
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  if modified then
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  end
 
   vim.api.nvim_buf_delete(buf, { force = true })
 
@@ -211,6 +219,25 @@ Notes.link_to_note = function(opts)
     cwd = opts.dir,
     attach_mappings = run_selection,
   })
+end
+
+Notes.retitle = function(opts)
+  if not (opts.dir == vim.fn.expand("%:p:h")) then
+    print("Not in a note file")
+    return
+  end
+
+  local filename = vim.fn.expand("%")
+  local new_title = vim.fn.input("Enter a new title: ")
+  if not new_title then
+    return
+  end
+
+  local file_info = parse_filename(filename)
+  file_info.title = new_title
+  local new_filename = get_filename(file_info)
+
+  rename_current_file(new_filename)
 end
 
 return Notes
