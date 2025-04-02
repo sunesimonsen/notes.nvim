@@ -1,5 +1,7 @@
 local Notes = {}
 
+vim.g.notes_dir = nil
+
 local function clean_title(title)
   title = title:lower()
   title = title:gsub(" ", "-")
@@ -14,6 +16,14 @@ local function clean_tag(tag)
   tag = tag:gsub("_+", "_")
   tag = tag:gsub("[^0-9a-zæøå]", "")
   return tag
+end
+
+local function get_notes_dir()
+  if vim.g.notes_dir == nil then
+    error("Please set vim.g.notes_dir to your notes diretory")
+  end
+
+  return vim.g.notes_dir
 end
 
 local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9a-zæøå]+)([_0-9a-zæøå]*).md$]]
@@ -96,14 +106,14 @@ local function rename_current_file(new_filename)
 end
 
 Notes.toggle_tag = function(opts)
-  if not (opts.dir == vim.fn.expand("%:p:h")) then
-    print("Not in a note file")
-    return
+  local notes_dir = get_notes_dir()
+  if not (notes_dir == vim.fn.expand("%:p:h")) then
+    error("Not in a note file:" .. vim.fn.expand("%"))
   end
 
   local tags_table = {}
 
-  local files = vim.fn.split(vim.fn.globpath(opts.dir, "*.md"), "\n")
+  local files = vim.fn.split(vim.fn.globpath(notes_dir, "*.md"), "\n")
 
   for _, filename in pairs(files) do
     for _, tag in pairs(tags_from_filename(filename)) do
@@ -155,9 +165,10 @@ Notes.toggle_tag = function(opts)
   end)
 end
 
-Notes.find_note = function(opts)
+Notes.find_note = function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
+  local notes_dir = get_notes_dir()
 
   local function run_selection(prompt_bufnr)
     actions.select_default:replace(function()
@@ -165,33 +176,33 @@ Notes.find_note = function(opts)
       local selection = action_state.get_selected_entry()
 
       if selection then
-        vim.cmd("e " .. opts.dir .. "/" .. selection[1])
+        vim.cmd("e " .. notes_dir .. "/" .. selection[1])
       else
         local line = action_state.get_current_line()
         local parts = vim.fn.split(line, "\\s*,\\s*")
         local filename = get_filename({
-          dir = opts.dir,
+          dir = notes_dir,
           title = parts[1],
           tags = { table.unpack(parts, 2) },
         })
 
-        vim.cmd("e " .. opts.dir .. "/" .. filename)
+        vim.cmd("e " .. notes_dir .. "/" .. filename)
       end
     end)
     return true
   end
 
   require("telescope.builtin").find_files({
-    cwd = opts.dir,
+    cwd = notes_dir,
     attach_mappings = run_selection,
   })
 end
 
-Notes.search_notes = function(opts)
-  require("telescope.builtin").live_grep({ cwd = opts.dir })
+Notes.search_notes = function()
+  require("telescope.builtin").live_grep({ cwd = get_notes_dir() })
 end
 
-Notes.link_to_note = function(opts)
+Notes.link_to_note = function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
 
@@ -216,15 +227,14 @@ Notes.link_to_note = function(opts)
   end
 
   require("telescope.builtin").find_files({
-    cwd = opts.dir,
+    cwd = get_notes_dir(),
     attach_mappings = run_selection,
   })
 end
 
-Notes.retitle = function(opts)
-  if not (opts.dir == vim.fn.expand("%:p:h")) then
-    print("Not in a note file")
-    return
+Notes.retitle = function()
+  if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
+    error("Not in a note file:" .. vim.fn.expand("%"))
   end
 
   local filename = vim.fn.expand("%")
