@@ -20,7 +20,7 @@ end
 
 local function get_notes_dir()
   if vim.g.notes_dir == nil then
-    error("Please set vim.g.notes_dir to your notes diretory")
+    error({ message = "Please set vim.g.notes_dir to your notes diretory" })
   end
 
   return vim.g.notes_dir
@@ -105,10 +105,24 @@ local function rename_current_file(new_filename)
   os.remove(filename)
 end
 
-Notes.toggle_tag = function(opts)
+local function with_errors_printed(cb)
+  return function(...)
+    local result, err = pcall(function()
+      cb(unpack(arg))
+    end)
+
+    if err then
+      print(err.message)
+    end
+
+    return result
+  end
+end
+
+Notes.toggle_tag = with_errors_printed(function()
   local notes_dir = get_notes_dir()
   if not (notes_dir == vim.fn.expand("%:p:h")) then
-    error("Not in a note file:" .. vim.fn.expand("%"))
+    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
   end
 
   local tags_table = {}
@@ -163,9 +177,9 @@ Notes.toggle_tag = function(opts)
 
     rename_current_file(new_filename)
   end)
-end
+end)
 
-Notes.find_note = function()
+Notes.find_note = with_errors_printed(function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local notes_dir = get_notes_dir()
@@ -196,13 +210,13 @@ Notes.find_note = function()
     cwd = notes_dir,
     attach_mappings = run_selection,
   })
-end
+end)
 
-Notes.search_notes = function()
+Notes.search_notes = with_errors_printed(function()
   require("telescope.builtin").live_grep({ cwd = get_notes_dir() })
-end
+end)
 
-Notes.link_to_note = function()
+Notes.link_to_note = with_errors_printed(function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
 
@@ -230,11 +244,11 @@ Notes.link_to_note = function()
     cwd = get_notes_dir(),
     attach_mappings = run_selection,
   })
-end
+end)
 
-Notes.retitle = function()
+Notes.retitle = with_errors_printed(function()
   if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
-    error("Not in a note file:" .. vim.fn.expand("%"))
+    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
   end
 
   local filename = vim.fn.expand("%")
@@ -248,6 +262,6 @@ Notes.retitle = function()
   local new_filename = get_filename(file_info)
 
   rename_current_file(new_filename)
-end
+end)
 
 return Notes
