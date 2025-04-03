@@ -8,7 +8,7 @@ vim.g.notes_dir = nil
 --- @class FileInto options for get_filename
 --- @field timestamp string The timestamp of the note
 --- @field title string The title of the note
---- @field tags table<string> The tags of the note
+--- @field tags string[] The tags of the note
 
 --- @class SelectableTag
 --- @field tag string The tag name
@@ -105,7 +105,7 @@ end
 
 --- Extracts tags from a given filename
 --- @param filename string - The filename to extract tags from
---- @return table<string> tags A list of tags or an empty table if none found
+--- @return string[] tags A list of tags or an empty table if none found
 local function tags_from_filename(filename)
   local parsed_filename = parse_filename(filename)
   if parsed_filename then
@@ -288,6 +288,7 @@ Notes.toggle_tag = with_errors_printed(function()
     end
   end
 
+  --- @type string[]
   local available_tags = {}
   for tag in pairs(tags_table) do
     -- Prepare tag list for selection
@@ -297,6 +298,7 @@ Notes.toggle_tag = with_errors_printed(function()
   table.sort(available_tags)
 
   function NoteGetTags(arg_lead, cmd_line, cursor_pos)
+    --- @type string[]
     local result = {}
 
     for _, tag in ipairs(available_tags) do
@@ -314,6 +316,7 @@ Notes.toggle_tag = with_errors_printed(function()
     completion = "customlist,v:lua.NoteGetTags",
   })
 
+  --- @type boolean[]
   local tags_state = {}
   for _, tag in ipairs(file_info.tags) do
     tags_state[tag] = true
@@ -321,6 +324,7 @@ Notes.toggle_tag = with_errors_printed(function()
 
   tags_state[toggled_tag] = not tags_state[toggled_tag]
 
+  --- @type string[]
   local new_tags = {}
   for tag, enabled in pairs(tags_state) do
     if enabled then
