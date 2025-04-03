@@ -165,80 +165,6 @@ local function with_errors_printed(cb)
   end
 end
 
--- Toggles tags for the current note
-Notes.toggle_tag = with_errors_printed(function()
-  if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
-    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
-  end
-
-  local tags_table = {}
-
-  local note_filename = vim.fn.expand("%")
-  for _, tag in pairs(tags_from_filename(note_filename)) do
-    tags_table[tag] = true -- Mark current file's tags as enabled
-  end
-
-  -- Gather existing tags from all note files
-  local files = vim.fn.split(vim.fn.globpath(get_notes_dir(), "*.md"), "\n")
-
-  for _, filename in pairs(files) do
-    for _, tag in pairs(tags_from_filename(filename)) do
-      tags_table[tag] = false -- Initialize tags as not enabled
-    end
-  end
-
-  --- @type SelectableTag[]
-  local available_tags = {}
-  for tag, enabled in pairs(tags_table) do
-    -- Prepare tag list for selection
-    table.insert(available_tags, { tag = tag, enabled = enabled })
-  end
-
-  table.sort(available_tags, function(a, b)
-    return a.tag > b.tag
-  end)
-
-  -- Prompt user to select a tag to toggle
-  vim.ui.select(available_tags, {
-    prompt = "Select a tag to toggle",
-    format_item = function(item)
-      if item.enabled then
-        return "☑ " .. item.tag
-      else
-        return "☐ " .. item.tag
-      end
-    end,
-  }, function(selected)
-    if not selected then
-      return
-    end
-
-    tags_table[selected.tag] = not selected.enabled -- Toggle the selected tag
-
-    local tags = {}
-    for tag, enabled in pairs(tags_table) do
-      if enabled then
-        -- Collect enabled tags
-        table.insert(tags, tag)
-      end
-    end
-
-    local file_info = parse_filename(note_filename)
-    if not file_info then
-      error({ message = "Not in a note file: " .. note_filename })
-    end
-
-    local new_filename = get_filename({
-      timestamp = file_info.timestamp,
-      title = file_info.title,
-      tags = tags,
-    })
-
-    -- Rename the current file with updated tags
-    rename_current_file(new_filename)
-  end)
-end)
-
 -- Finds and opens a note file
 Notes.find_note = with_errors_printed(function()
   local actions = require("telescope.actions")
@@ -335,6 +261,75 @@ Notes.retitle = with_errors_printed(function()
   end
 
   file_info.title = new_title -- Update title
+  local new_filename = get_filename(file_info) -- Generate new filename
+
+  rename_current_file(new_filename) -- Rename the current file to the new filename
+end)
+
+--- Update tags for note
+Notes.toggle_tag = with_errors_printed(function()
+  if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
+    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
+  end
+
+  local note_filename = vim.fn.expand("%")
+  local file_info = parse_filename(note_filename)
+  if not file_info then
+    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
+  end
+
+  -- Gather existing tags from all note files
+  local files = vim.fn.split(vim.fn.globpath(get_notes_dir(), "*.md"), "\n")
+
+  local tags_table = {}
+  for _, filename in pairs(files) do
+    for _, tag in pairs(tags_from_filename(filename)) do
+      tags_table[tag] = true -- Initialize tags as not enabled
+    end
+  end
+
+  local available_tags = {}
+  for tag in pairs(tags_table) do
+    -- Prepare tag list for selection
+    table.insert(available_tags, tag)
+  end
+
+  table.sort(available_tags)
+
+  function NoteGetTags(arg_lead, cmd_line, cursor_pos)
+    local result = {}
+
+    for _, tag in ipairs(available_tags) do
+      if arg_lead == string.sub(tag, 0, #arg_lead) then
+        table.insert(result, tag)
+      end
+    end
+
+    return result
+  end
+
+  local toggled_tag = vim.fn.input({
+    prompt = "Toggle tag: ",
+    default = "",
+    completion = "customlist,v:lua.NoteGetTags",
+  })
+
+  local tags_state = {}
+  for _, tag in ipairs(file_info.tags) do
+    tags_state[tag] = true
+  end
+
+  tags_state[toggled_tag] = not tags_state[toggled_tag]
+
+  local new_tags = {}
+  for tag, enabled in pairs(tags_state) do
+    if enabled then
+      table.insert(new_tags, tag)
+    end
+  end
+
+  -- Update note tags
+  file_info.tags = new_tags
   local new_filename = get_filename(file_info) -- Generate new filename
 
   rename_current_file(new_filename) -- Rename the current file to the new filename
