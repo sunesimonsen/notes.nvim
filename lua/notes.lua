@@ -165,7 +165,7 @@ local function with_errors_printed(cb)
   end
 end
 
--- Finds and opens a note file
+-- Find an existing note file or create a new one
 Notes.find_note = with_errors_printed(function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
@@ -205,7 +205,7 @@ Notes.search_notes = with_errors_printed(function()
   require("telescope.builtin").live_grep({ cwd = get_notes_dir() })
 end)
 
--- Links to another note
+-- Insert a link to another note
 Notes.link_to_note = with_errors_printed(function()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
