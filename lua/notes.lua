@@ -171,8 +171,31 @@ Notes.find_note = with_errors_printed(function()
   local action_state = require("telescope.actions.state")
   local notes_dir = get_notes_dir()
 
+  -- Create a new note from the given text
+  local function create_from_text(text)
+    local parts = vim.fn.split(text, "\\s*,\\s*") -- Split input line by commas
+    local filename = get_filename({
+      dir = notes_dir,
+      title = parts[1],
+      tags = { table.unpack(parts, 2) }, -- Remaining parts as tags
+    })
+
+    vim.cmd("e " .. notes_dir .. "/" .. filename) -- Open the new note
+  end
+
+  local create_from_prompt = with_errors_printed(function()
+    local line = action_state.get_current_line()
+
+    create_from_text(line)
+  end)
+
   -- Function to handle selection from the note search
-  local function run_selection(prompt_bufnr)
+  local function run_selection(prompt_bufnr, map)
+    map("i", "<S-CR>", function()
+      actions.close(prompt_bufnr)
+      create_from_prompt()
+    end)
+
     actions.select_default:replace(function()
       actions.close(prompt_bufnr)
       local selection = action_state.get_selected_entry()
@@ -181,14 +204,7 @@ Notes.find_note = with_errors_printed(function()
         vim.cmd("e " .. notes_dir .. "/" .. selection[1]) -- Open the selected note
       else
         local line = action_state.get_current_line()
-        local parts = vim.fn.split(line, "\\s*,\\s*") -- Split input line by commas
-        local filename = get_filename({
-          dir = notes_dir,
-          title = parts[1],
-          tags = { table.unpack(parts, 2) }, -- Remaining parts as tags
-        })
-
-        vim.cmd("e " .. notes_dir .. "/" .. filename) -- Open the new note
+        create_from_text(line)
       end
     end)
     return true
