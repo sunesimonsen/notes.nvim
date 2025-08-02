@@ -154,7 +154,7 @@ local function with_errors_printed(cb)
     end)
 
     if err then
-      if err.mesasge then
+      if err.message then
         print(err.message)
       else
         print(err)
