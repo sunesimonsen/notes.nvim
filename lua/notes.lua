@@ -1,22 +1,18 @@
--- Define a module for managing notes
-local Notes = {}
+---@class NoteInfo
+---@field timestamp string
+---@field title string
+---@field tags string[]
 
---- Global variable to store the directory for notes
---- @type string
-vim.g.notes_dir = nil
+---@class NotesPlugin
+---@field dir string
+local Notes = {
+  dir = "",
+}
 
---- @class FileInto options for get_filename
---- @field timestamp string The timestamp of the note
---- @field title string The title of the note
---- @field tags string[] The tags of the note
-
---- @class SelectableTag
---- @field tag string The tag name
---- @field enabled boolean If the tag is enabled for the note
-
---- Cleans the title string for filenames
---- @param title string The title to clean
---- @return string The cleaned title
+---Cleans a title string by converting to lowercase, replacing spaces with
+---hyphens and removing invalid characters.
+---@param title string
+---@return string
 local function clean_title(title)
   title = title:lower() -- Convert to lowercase
   title = title:gsub(" ", "-") -- Replace spaces with hyphens
@@ -25,9 +21,10 @@ local function clean_title(title)
   return title
 end
 
---- Cleans the tag string for filenames
---- @param tag string The tag to clean
---- @return string cleaned_tag The cleaned tag
+---Cleans a tag string by converting to lowercase, replacing spaces with
+---hyphens and removing invalid characters.
+---@param tag string
+---@return string
 local function clean_tag(tag)
   tag = tag:lower() -- Convert to lowercase
   tag = tag:gsub(" ", "-") -- Replace spaces with hyphens
@@ -36,23 +33,56 @@ local function clean_tag(tag)
   return tag
 end
 
---- Retrieves the notes directory from the global variable
---- Fails if vim.g.notes_dir isn't set.
---- @return string notes_dir The notes directory
-local function get_notes_dir()
-  if vim.g.notes_dir == nil then
-    error({ message = "Please set vim.g.notes_dir to your notes directory" })
+---Notify user that the current file is not in the notes directory.
+local function print_not_in_notes_dir()
+  vim.notify("Not in a note file: " .. vim.fn.expand("%"), vim.log.levels.WARN)
+end
+
+---Setup the Notes plugin.
+---@param opts { dir: string }
+function Notes.setup(opts)
+  opts = opts or {}
+
+  if opts.dir == nil then
+    vim.notify("Please set the directory containing the notes", vim.log.levels.ERROR)
+    return
   end
 
-  return vim.g.notes_dir
+  Notes.dir = opts.dir
+
+  local commands = { "find", "link_to_note", "retitle", "search", "toggle_tag" }
+  vim.api.nvim_create_user_command("Notes", function(command_opts)
+    local args = command_opts.args
+    if args == "find" then
+      Notes:find_note()
+    elseif args == "link_to_note" then
+      Notes:link_to_note()
+    elseif args == "retitle" then
+      Notes:retitle()
+    elseif args == "search" then
+      Notes:search_notes()
+    elseif args == "toggle_tag" then
+      Notes:toggle_tag()
+    else
+      vim.notify("Unknown command: " .. args, vim.log.levels.WARN)
+    end
+  end, {
+    nargs = 1,
+    complete = function(_, line)
+      local l = vim.split(line, "%s+")
+      return vim.tbl_filter(function(val)
+        return vim.startswith(val, l[2])
+      end, commands)
+    end,
+  })
 end
 
 -- Regular expression to parse filenames
 local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9a-zæøå]+)([_0-9a-zæøå]*).md$]]
 
---- Parses a filename to extract timestamp, title, and tags
---- @param filename string The filename to parse
---- @return FileInto|nil file_info A table containing timestamp, title, and tags or nil if parsing fails
+---Parses a note filename into its components.
+---@param filename string
+---@return NoteInfo|nil
 local function parse_filename(filename)
   local timestamp, title_string, tags_string = string.match(filename, filename_regexp)
 
@@ -70,9 +100,9 @@ local function parse_filename(filename)
   }
 end
 
---- Generates a filename based on provided options
---- @param opts FileInto Options containing timestamp, title, and tags
---- @return string filename The generated filename
+---Generates a valid filename for a note.
+---@param opts { timestamp?: string, title: string, tags?: string[] }
+---@return string
 local function get_filename(opts)
   local timestamp = opts.timestamp or os.date("!%Y%m%dT%H%M%S", os.time()) -- Default to current timestamp if not provided
 
@@ -103,9 +133,9 @@ local function get_filename(opts)
   return filename
 end
 
---- Extracts tags from a given filename
---- @param filename string - The filename to extract tags from
---- @return string[] tags A list of tags or an empty table if none found
+---Extracts tags from a filename.
+---@param filename string
+---@return string[]
 local function tags_from_filename(filename)
   local parsed_filename = parse_filename(filename)
   if parsed_filename then
@@ -115,8 +145,8 @@ local function tags_from_filename(filename)
   end
 end
 
---- Renames the current file to a new filename
---- @param new_filename string The new filename to rename to
+---Renames the current file.
+---@param new_filename string
 local function rename_current_file(new_filename)
   local buf = vim.api.nvim_get_current_buf() -- Get the current buffer
   local modified = vim.api.nvim_get_option_value("modified", { buf = buf }) -- Check if the buffer is modified
@@ -143,39 +173,17 @@ local function rename_current_file(new_filename)
   os.remove(filename) -- Remove the old file
 end
 
---- Wraps a callback function to handle errors gracefully
---- @param cb function - The callback function to wrap
---- @return function function_with_error_handling A new function that handles errors
-local function with_errors_printed(cb)
-  return function(...)
-    local cb_arg = arg
-    local result, err = pcall(function()
-      cb(unpack(cb_arg))
-    end)
-
-    if err then
-      if err.message then
-        print(err.message)
-      else
-        print(err)
-      end
-    end
-
-    return result
-  end
-end
-
--- Find an existing note file or create a new one
-Notes.find_note = with_errors_printed(function()
+---Find an existing note file or create a new one.
+function Notes:find_note()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
-  local notes_dir = get_notes_dir()
+  local notes_dir = self.dir
 
-  -- Create a new note from the given text
+  ---Creates a new note from the given text input.
+  ---@param text string
   local function create_from_text(text)
     local parts = vim.fn.split(text, "\\s*,\\s*") -- Split input line by commas
     local filename = get_filename({
-      dir = notes_dir,
       title = parts[1],
       tags = { table.unpack(parts, 2) }, -- Remaining parts as tags
     })
@@ -183,13 +191,14 @@ Notes.find_note = with_errors_printed(function()
     vim.cmd("e " .. notes_dir .. "/" .. filename) -- Open the new note
   end
 
-  local create_from_prompt = with_errors_printed(function()
-    local line = action_state.get_current_line()
-
+  local create_from_prompt = function()
+    local line = require("telescope.actions.state").get_current_line()
     create_from_text(line)
-  end)
+  end
 
-  -- Function to handle selection from the note search
+  ---Handles selection from the note search.
+  ---@param prompt_bufnr number
+  ---@param map fun(mode: string, lhs: string, rhs: fun()): any
   local function run_selection(prompt_bufnr, map)
     map("i", "<S-CR>", function()
       actions.close(prompt_bufnr)
@@ -214,19 +223,20 @@ Notes.find_note = with_errors_printed(function()
     cwd = notes_dir,
     attach_mappings = run_selection,
   })
-end)
+end
 
--- Searches notes using live grep
-Notes.search_notes = with_errors_printed(function()
-  require("telescope.builtin").live_grep({ cwd = get_notes_dir() })
-end)
+---Searches notes using live grep.
+function Notes:search_notes()
+  require("telescope.builtin").live_grep({ cwd = self.dir })
+end
 
--- Insert a link to another note
-Notes.link_to_note = with_errors_printed(function()
+---Insert a link to another note.
+function Notes:link_to_note()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
 
-  -- Function to handle selection from the note link search
+  ---Handles selection from the note link search.
+  ---@param prompt_bufnr number
   local function run_selection(prompt_bufnr)
     actions.select_default:replace(function()
       local selection = action_state.get_selected_entry()
@@ -243,24 +253,25 @@ Notes.link_to_note = with_errors_printed(function()
 
         vim.api.nvim_put({ "[" .. title .. "](" .. id .. ".id)" }, "c", true, true) -- Insert link
       else
-        print("No file selected")
+        vim.notify("No file selected", vim.log.levels.WARN)
       end
     end)
     return true
   end
 
   require("telescope.builtin").find_files({
-    cwd = get_notes_dir(),
+    cwd = self.dir,
     attach_mappings = run_selection,
   })
-end)
+end
 
--- Retitles the current note
-Notes.retitle = with_errors_printed(function()
+---Retitles the current note.
+function Notes:retitle()
   local filename = vim.fn.expand("%")
 
-  if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
-    error({ message = "Not in a note file: " .. filename })
+  if not (self.dir == vim.fn.expand("%:p:h")) then
+    print_not_in_notes_dir()
+    return
   end
 
   -- Prompt for new title
@@ -273,29 +284,30 @@ Notes.retitle = with_errors_printed(function()
   local file_info = parse_filename(filename)
 
   if not file_info then
-    error({ message = "Not in a note file: " .. filename })
+    return
   end
 
   file_info.title = new_title -- Update title
   local new_filename = get_filename(file_info) -- Generate new filename
 
   rename_current_file(new_filename) -- Rename the current file to the new filename
-end)
+end
 
---- Update tags for note
-Notes.toggle_tag = with_errors_printed(function()
-  if not (get_notes_dir() == vim.fn.expand("%:p:h")) then
-    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
+---Toggles a tag in the current note.
+function Notes:toggle_tag()
+  if not (self.dir == vim.fn.expand("%:p:h")) then
+    print_not_in_notes_dir()
+    return
   end
 
   local note_filename = vim.fn.expand("%")
   local file_info = parse_filename(note_filename)
   if not file_info then
-    error({ message = "Not in a note file: " .. vim.fn.expand("%") })
+    return
   end
 
   -- Gather existing tags from all note files
-  local files = vim.fn.split(vim.fn.globpath(get_notes_dir(), "*.md"), "\n")
+  local files = vim.fn.split(vim.fn.globpath(self.dir, "*.md"), "\n")
 
   local tags_table = {}
   for _, filename in pairs(files) do
@@ -304,7 +316,6 @@ Notes.toggle_tag = with_errors_printed(function()
     end
   end
 
-  --- @type string[]
   local available_tags = {}
   for tag in pairs(tags_table) do
     -- Prepare tag list for selection
@@ -313,8 +324,12 @@ Notes.toggle_tag = with_errors_printed(function()
 
   table.sort(available_tags)
 
-  function NoteGetTags(arg_lead, cmd_line, cursor_pos)
-    --- @type string[]
+  ---Custom completion function for tag input.
+  ---@param arg_lead string
+  ---@param cmd_line string
+  ---@param cursor_pos number
+  ---@return string[]
+  function NotesGetTags(arg_lead, cmd_line, cursor_pos)
     local result = {}
 
     for _, tag in ipairs(available_tags) do
@@ -329,10 +344,9 @@ Notes.toggle_tag = with_errors_printed(function()
   local toggled_tag = vim.fn.input({
     prompt = "Toggle tag: ",
     default = "",
-    completion = "customlist,v:lua.NoteGetTags",
+    completion = "customlist,v:lua.NotesGetTags",
   })
 
-  --- @type boolean[]
   local tags_state = {}
   for _, tag in ipairs(file_info.tags) do
     tags_state[tag] = true
@@ -340,7 +354,6 @@ Notes.toggle_tag = with_errors_printed(function()
 
   tags_state[toggled_tag] = not tags_state[toggled_tag]
 
-  --- @type string[]
   local new_tags = {}
   for tag, enabled in pairs(tags_state) do
     if enabled then
@@ -353,6 +366,6 @@ Notes.toggle_tag = with_errors_printed(function()
   local new_filename = get_filename(file_info) -- Generate new filename
 
   rename_current_file(new_filename) -- Rename the current file to the new filename
-end)
+end
 
 return Notes
