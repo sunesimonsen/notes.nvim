@@ -50,10 +50,12 @@ function Notes.setup(opts)
 
   Notes.dir = opts.dir
 
-  local commands = { "find", "link_to_note", "retitle", "search", "toggle_tag" }
+  local commands = { "create", "find", "link_to_note", "retitle", "search", "toggle_tag" }
   vim.api.nvim_create_user_command("Notes", function(command_opts)
     local args = command_opts.args
-    if args == "find" then
+    if args == "create" then
+      Notes:create()
+    elseif args == "find" then
       Notes:find_note()
     elseif args == "link_to_note" then
       Notes:link_to_note()
@@ -173,27 +175,33 @@ local function rename_current_file(new_filename)
   os.remove(filename) -- Remove the old file
 end
 
+---Creates a new note from the given text input.
+---If no text is given the user is prompted for a title.
+---
+---Tags can be specified after the title by separating them with commas:
+---This is the title, tag_one, tag_two
+---@param text string|nil
+function Notes:create(text)
+  local title = text or vim.fn.input("Note: ")
+
+  local parts = vim.fn.split(title, "\\s*,\\s*") -- Split input line by commas
+  local filename = get_filename({
+    title = parts[1],
+    tags = { table.unpack(parts, 2) }, -- Remaining parts as tags
+  })
+
+  vim.cmd("e " .. self.dir .. "/" .. filename) -- Open the new note
+end
+
 ---Find an existing note file or create a new one.
 function Notes:find_note()
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local notes_dir = self.dir
 
-  ---Creates a new note from the given text input.
-  ---@param text string
-  local function create_from_text(text)
-    local parts = vim.fn.split(text, "\\s*,\\s*") -- Split input line by commas
-    local filename = get_filename({
-      title = parts[1],
-      tags = { table.unpack(parts, 2) }, -- Remaining parts as tags
-    })
-
-    vim.cmd("e " .. notes_dir .. "/" .. filename) -- Open the new note
-  end
-
   local create_from_prompt = function()
     local line = require("telescope.actions.state").get_current_line()
-    create_from_text(line)
+    self:create(line)
   end
 
   ---Handles selection from the note search.
@@ -206,14 +214,13 @@ function Notes:find_note()
     end)
 
     actions.select_default:replace(function()
-      actions.close(prompt_bufnr)
       local selection = action_state.get_selected_entry()
 
       if selection then
+        actions.close(prompt_bufnr)
         vim.cmd("e " .. notes_dir .. "/" .. selection[1]) -- Open the selected note
       else
-        local line = action_state.get_current_line()
-        create_from_text(line)
+        vim.notify("No file selected", vim.log.levels.WARN)
       end
     end)
     return true
@@ -307,7 +314,7 @@ function Notes:toggle_tag()
   end
 
   -- Gather existing tags from all note files
-  local files = vim.fn.split(vim.fn.globpath(self.dir, "*.md"), "\n")
+  local files = vim.fn.globpath(self.dir, "*.md", false, true)
 
   local tags_table = {}
   for _, filename in pairs(files) do
