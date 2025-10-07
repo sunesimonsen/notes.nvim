@@ -9,23 +9,47 @@ https://github.com/user-attachments/assets/91f7b555-86d0-4518-9e1d-c3d328c78c68
 
 ## Installation
 
+### lazy.nvim
+
 ```lua
 return {
   'sunesimonsen/notes.nvim',
-  dependencies = { 'nvim-telescope/telescope.nvim', },
-  opts = {
-    dir = '/Users/ssimonsen/Library/CloudStorage/Dropbox/denoted',
-  },
+  opts = { dir = '~/notes', },
   keys = {
     { '<leader>nn', ':Notes find<CR>', desc = 'Find note', mode = { 'n' } },
+    { '<leader>ns', ':Notes search<CR>', desc = 'Search through notes', mode = { 'n' } },
     { '<leader>nl', ':Notes link_to_note<CR>', desc = 'Link to note', mode = { 'n' } },
     { '<leader>nr', ':Notes retitle<CR>', desc = 'Retitle note', mode = { 'n' } },
-    { '<leader>ns', ':Notes search<CR>', desc = 'Search through notes', mode = { 'n' } },
     { '<leader>nt', ':Notes toggle_tag<CR>', desc = 'Toggle tag', mode = { 'n' } },
   },
   lazy = false,
 }
+```
 
+If you have [telescope](https://github.com/nvim-telescope/telescope.nvim) you
+can use the telescope extension:
+
+```lua
+return {
+  'sunesimonsen/notes.nvim',
+  dependencies = {
+    'nvim-telescope/telescope.nvim'
+  }
+  opts = { dir = '~/notes' },
+  config = function (opts)
+    require('notes').setup(opts)
+    require('telescope').load_extension 'find_note'
+    require('telescope').load_extension 'search_notes'
+  end,
+  keys = {
+    { '<leader>nn', ':Telescope find_note<CR>', desc = 'Find note', mode = { 'n' } },
+    { '<leader>ns', ':Telescope search_notes<CR>', desc = 'Search through notes', mode = { 'n' } },
+    { '<leader>nl', ':Notes link_to_note<CR>', desc = 'Link to note', mode = { 'n' } },
+    { '<leader>nr', ':Notes retitle<CR>', desc = 'Retitle note', mode = { 'n' } },
+    { '<leader>nt', ':Notes toggle_tag<CR>', desc = 'Toggle tag', mode = { 'n' } },
+  },
+  lazy = false,
+}
 ```
 
 ## File naming scheme
