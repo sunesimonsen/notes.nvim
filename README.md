@@ -26,8 +26,9 @@ return {
 }
 ```
 
-If you have [telescope](https://github.com/nvim-telescope/telescope.nvim) you
-can use the telescope extension:
+If you have [Telescope](https://github.com/nvim-telescope/telescope.nvim)
+available, you
+can use the Telescope extension for searching:
 
 ```lua
 return {
