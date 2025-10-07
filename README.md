@@ -9,10 +9,11 @@ https://github.com/user-attachments/assets/91f7b555-86d0-4518-9e1d-c3d328c78c68
 
 ## Installation
 
+### lazy.nvim
 ```lua
+
 return {
   'sunesimonsen/notes.nvim',
-  dependencies = { 'nvim-telescope/telescope.nvim', },
   opts = {
     dir = '/Users/ssimonsen/Library/CloudStorage/Dropbox/denoted',
   },
@@ -25,8 +26,8 @@ return {
   },
   lazy = false,
 }
-
 ```
+
 
 ## File naming scheme
 

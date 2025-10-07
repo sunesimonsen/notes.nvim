@@ -195,81 +195,56 @@ end
 
 ---Find an existing note file or create a new one.
 function Notes:find_note()
-  local actions = require("telescope.actions")
-  local action_state = require("telescope.actions.state")
-  local notes_dir = self.dir
+  local files = vim.fn.globpath(self.dir, "*.md", false, true)
 
-  local create_from_prompt = function()
-    local line = require("telescope.actions.state").get_current_line()
-    self:create(line)
-  end
-
-  ---Handles selection from the note search.
-  ---@param prompt_bufnr number
-  ---@param map fun(mode: string, lhs: string, rhs: fun()): any
-  local function run_selection(prompt_bufnr, map)
-    map("i", "<S-CR>", function()
-      actions.close(prompt_bufnr)
-      create_from_prompt()
-    end)
-
-    actions.select_default:replace(function()
-      local selection = action_state.get_selected_entry()
-
-      if selection then
-        actions.close(prompt_bufnr)
-        vim.cmd("e " .. notes_dir .. "/" .. selection[1]) -- Open the selected note
-      else
-        vim.notify("No file selected", vim.log.levels.WARN)
-      end
-    end)
-    return true
-  end
-
-  require("telescope.builtin").find_files({
-    cwd = notes_dir,
-    attach_mappings = run_selection,
-  })
+  vim.ui.select(files, {
+    prompt = "Find note",
+    format_item = function(filename)
+      return filename:match("([^/\\]+)$")
+    end,
+  }, function(filename)
+    if filename then
+      vim.cmd("e " .. filename)
+    else
+      vim.notify("No file selected", vim.log.levels.WARN)
+    end
+  end)
 end
 
 ---Searches notes using live grep.
 function Notes:search_notes()
-  require("telescope.builtin").live_grep({ cwd = self.dir })
+  local query = vim.fn.input("Search for notes (regex): ")
+
+  vim.cmd({ cmd = "vimgrep", args = { query, self.dir .. "/*.md" } })
 end
 
 ---Insert a link to another note.
 function Notes:link_to_note()
-  local actions = require("telescope.actions")
-  local action_state = require("telescope.actions.state")
+  local files = vim.fn.globpath(self.dir, "*.md", false, true)
 
-  ---Handles selection from the note link search.
-  ---@param prompt_bufnr number
-  local function run_selection(prompt_bufnr)
-    actions.select_default:replace(function()
-      local selection = action_state.get_selected_entry()
-
-      if selection then
-        actions.close(prompt_bufnr)
-
-        local filename = selection[1]
-        -- Extract ID from filename
-        local id = filename:sub(1, 15)
-        local title_end = filename:find("[_.]", 18)
-        -- Convert hyphenated title back to spaces
-        local title = filename:sub(18, title_end - 1):gsub("-", " ")
-
-        vim.api.nvim_put({ "[" .. title .. "](" .. id .. ".id)" }, "c", true, true) -- Insert link
-      else
-        vim.notify("No file selected", vim.log.levels.WARN)
+  vim.ui.select(files, {
+    prompt = "Link to note",
+    format_item = function(filename)
+      local file_info = parse_filename(filename)
+      if not file_info then
+        return ""
       end
-    end)
-    return true
-  end
 
-  require("telescope.builtin").find_files({
-    cwd = self.dir,
-    attach_mappings = run_selection,
-  })
+      return file_info.title
+    end,
+  }, function(filename)
+    if filename then
+      local file_info = parse_filename(filename)
+
+      if file_info then
+        vim.api.nvim_put({ "[" .. file_info.title .. "](" .. file_info.timestamp .. ".id)" }, "c", true, true) -- Insert link
+      else
+        vim.notify("Could not parse filename", vim.log.levels.WARN)
+      end
+    else
+      vim.notify("No file selected", vim.log.levels.WARN)
+    end
+  end)
 end
 
 ---Retitles the current note.
