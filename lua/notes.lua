@@ -9,15 +9,14 @@ local Notes = {
   dir = "",
 }
 
----Cleans a title string by converting to lowercase, replacing spaces with
+---Cleans a title string by preserving its case, replacing spaces with
 ---hyphens and removing invalid characters.
 ---@param title string
 ---@return string
 local function clean_title(title)
-  title = title:lower() -- Convert to lowercase
   title = title:gsub(" ", "-") -- Replace spaces with hyphens
   title = title:gsub("-+", "-") -- Replace multiple hyphens with a single hyphen
-  title = title:gsub("[^-0-9a-zæøå]", "") -- Remove invalid characters
+  title = title:gsub("[^-0-9A-Za-zÆØÅæøå]", "") -- Remove invalid characters
   return title
 end
 
@@ -48,7 +47,7 @@ function Notes.setup(opts)
     return
   end
 
-  Notes.dir = opts.dir
+  Notes.dir = vim.fn.expand(opts.dir)
 
   local commands = { "create", "find", "link_to_note", "retitle", "search", "toggle_tag" }
   vim.api.nvim_create_user_command("Notes", function(command_opts)
@@ -80,7 +79,7 @@ function Notes.setup(opts)
 end
 
 -- Regular expression to parse filenames
-local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9a-zæøå]+)([_0-9a-zæøå]*).md$]]
+local filename_regexp = [[(%d%d%d%d%d%d%d%dT%d%d%d%d%d%d)([-0-9A-Za-zÆØÅæøå]+)([_0-9a-zæøå]*).md$]]
 
 ---Parses a note filename into its components.
 ---@param filename string
@@ -162,17 +161,31 @@ local function rename_current_file(new_filename)
 
   local filename = vim.fn.expand("%") -- Get current filename
   local folder = vim.fn.expand("%:p:h") -- Get current folder
+  local destination = folder .. "/" .. new_filename
+  local current_filename = vim.fn.fnamemodify(filename, ":t")
 
-  os.rename(filename, folder .. "/" .. new_filename) -- Rename the file
-
-  vim.cmd("e! " .. folder .. "/" .. new_filename) -- Open the new file
-  if modified then
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines) -- Restore lines if modified
+  -- Case-insensitive filesystems cannot reliably rename a file when only its
+  -- casing changes. Move it through the system temporary directory first.
+  local case_only_rename = current_filename ~= new_filename
+    and vim.fn.tolower(current_filename) == vim.fn.tolower(new_filename)
+  if case_only_rename then
+    local temporary_filename = vim.fn.tempname()
+    os.rename(filename, temporary_filename)
+    os.rename(temporary_filename, destination)
+    vim.api.nvim_buf_set_name(buf, destination)
+  else
+    os.rename(filename, destination) -- Rename the file
   end
 
-  vim.api.nvim_buf_delete(buf, { force = true }) -- Delete the old buffer
+  vim.cmd("e! " .. destination) -- Open the new file
+  local destination_buf = vim.api.nvim_get_current_buf()
+  if modified then
+    vim.api.nvim_buf_set_lines(destination_buf, 0, -1, false, lines) -- Restore lines if modified
+  end
 
-  os.remove(filename) -- Remove the old file
+  if buf ~= destination_buf then
+    vim.api.nvim_buf_delete(buf, { force = true }) -- Delete the old buffer
+  end
 end
 
 ---Creates a new note from the given text input.
